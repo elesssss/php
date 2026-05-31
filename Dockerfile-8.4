@@ -1,10 +1,9 @@
 FROM php:8.4-fpm-alpine
 
-COPY install-php-extensions /usr/local/bin/
+ADD --chmod=0755 https://github.com/mlocati/docker-php-extension-installer/releases/latest/download/install-php-extensions /usr/local/bin/
 ADD --chmod=0755 https://getcomposer.org/download/latest-stable/composer.phar /usr/local/bin/composer
 
-RUN chmod +x /usr/local/bin/install-php-extensions \
-    && install-php-extensions bcmath gd mysqli pdo_mysql redis swoole yaml zip \
+RUN install-php-extensions bcmath gd mysqli pdo_mysql redis swoole yaml zip \
     && rm -rf /var/cache/apk/*
 
 RUN echo "upload_max_filesize=1024M" > /usr/local/etc/php/conf.d/uploads.ini \
