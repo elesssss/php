@@ -45,9 +45,9 @@ jobs:
       - name: Build and push multi-architecture Docker image
         run: |
           docker buildx build --push \
-            --file Dockerfile-8.4 \
+            --file Dockerfile-7.4 \
             --platform linux/amd64,linux/arm64 \
-            --tag ghcr.io/${{ github.repository }}:8.4 .
+            --tag ghcr.io/${{ github.repository }}:7.4 .
 
       - name: Cleanup
         run: |
