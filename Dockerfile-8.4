@@ -1,9 +1,10 @@
-FROM php:8.4-fpm
+FROM php:8.4-fpm-alpine
 
 ADD --chmod=0755 https://github.com/mlocati/docker-php-extension-installer/releases/latest/download/install-php-extensions /usr/local/bin/
 ADD --chmod=0755 https://getcomposer.org/download/latest-stable/composer.phar /usr/local/bin/composer
 
 RUN install-php-extensions bcmath gd mysqli pdo_mysql opcache redis swoole yaml zip \
+    &&  ( install-php-extensions ioncube_loader || echo "⚠ ionCube 安装失败，已跳过" ) \
     && rm -rf /var/cache/apk/*
 
 RUN echo "upload_max_filesize=1024M" > /usr/local/etc/php/conf.d/uploads.ini \
