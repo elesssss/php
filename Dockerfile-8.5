@@ -5,9 +5,9 @@ ADD --chmod=0755 https://getcomposer.org/download/latest-stable/composer.phar /u
 
 RUN arch="$(uname -m)"; \
     if [ "$arch" = "aarch64" ] || [ "$arch" = "armv8l" ]; then \
-        install-php-extensions bcmath gd mysqli pdo_mysql opcache redis swoole yaml zip; \
+        install-php-extensions bcmath gd mysqli pdo_mysql opcache pcntl redis swoole yaml zip; \
     else \
-        install-php-extensions bcmath gd ioncube_loader mysqli pdo_mysql opcache redis swoole yaml zip; \
+        install-php-extensions bcmath gd ioncube_loader mysqli pdo_mysql opcache pcntl redis swoole yaml zip; \
     fi && \
     rm -rf /var/cache/apk/*
 
