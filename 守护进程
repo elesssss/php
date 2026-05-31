@@ -3,14 +3,15 @@
 set -e
 
 # 配置
-DAEMON="/opt/nezha/dashboard"
-DAEMON_USER="root"
-PIDFILE="/var/run/nezha-dashboard.pid"
-WORKDIR="/opt/nezha"
+EXEC="/usr/bin/php"                        # PHP 可执行文件路径
+ARGS="/var/www/v2board/artisan horizon"    # 传给 php 的参数
+EXEC_USER="www-data"
+PIDFILE="/var/run/v2board.pid"
+WORKDIR="/var/www/v2board"
 
-# 可选：从 /etc/default/nezha-dashboard 加载额外参数
-if [ -f /etc/default/nezha-dashboard ]; then
-    . /etc/default/nezha-dashboard
+# 可选：从 /etc/default/v2board 加载额外参数
+if [ -f /etc/default/v2board ]; then
+    . /etc/default/v2board
 fi
 
 # 日志输出函数（不使用 LSB）
@@ -18,9 +19,6 @@ log_success_msg() { echo " [ OK ] $1"; }
 log_failure_msg() { echo " [FAIL] $1" >&2; }
 log_warning_msg() { echo " [WARN] $1" >&2; }
 log_daemon_msg() { echo -n " $1... "; }
-
-# 检查可执行文件
-test -x "$DAEMON" || { echo "ERROR: $DAEMON not found or not executable"; exit 1; }
 
 # 获取 PID（如果存在且进程存活）
 get_pid() {
@@ -40,7 +38,7 @@ is_running() {
 
 case "$1" in
     start)
-        log_daemon_msg "Starting Nezha Dashboard"
+        log_daemon_msg "Starting v2board"
         if is_running; then
             log_success_msg "already running (pid=$(get_pid))"
             exit 0
@@ -50,12 +48,12 @@ case "$1" in
             start-stop-daemon --start --background --make-pidfile \
                 --pidfile "$PIDFILE" \
                 --chdir "$WORKDIR" \
-                --user "$DAEMON_USER" \
-                --exec "$DAEMON" -- "$DAEMON_OPTS"
+                --user "$EXEC_USER" \
+                --exec "$EXEC" -- $ARGS
         else
             # 备用方案：直接后台启动并写入 PID
             cd "$WORKDIR"
-            nohup "$DAEMON" $DAEMON_OPTS >/dev/null 2>&1 &
+            nohup "$EXEC" $ARGS >/dev/null 2>&1 &
             echo $! > "$PIDFILE"
         fi
         # 等待最多 5 秒确认启动
@@ -71,7 +69,7 @@ case "$1" in
         ;;
 
     stop)
-        log_daemon_msg "Stopping Nezha Dashboard"
+        log_daemon_msg "Stopping v2board"
         if ! is_running; then
             log_success_msg "not running"
             exit 0
@@ -96,7 +94,7 @@ case "$1" in
         ;;
 
     reload|force-reload)
-        log_daemon_msg "Reloading Nezha Dashboard configuration"
+        log_daemon_msg "Reloading v2board configuration"
         if ! is_running; then
             log_failure_msg "not running, cannot reload"
             exit 1
@@ -127,10 +125,10 @@ case "$1" in
 
     status)
         if is_running; then
-            echo "Nezha Dashboard is running (pid=$(get_pid))"
+            echo "v2board is running (pid=$(get_pid))"
             exit 0
         else
-            echo "Nezha Dashboard is not running"
+            echo "v2board is not running"
             exit 3
         fi
         ;;
