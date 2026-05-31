@@ -4,7 +4,7 @@ ADD --chmod=0755 https://github.com/mlocati/docker-php-extension-installer/relea
 ADD --chmod=0755 https://getcomposer.org/download/latest-stable/composer.phar /usr/local/bin/composer
 
 RUN install-php-extensions bcmath gd ioncube_loader mysqli opcache pdo_mysql redis swoole yaml zip \
-    && rm -rf /var/cache/apk/*
+    && rm -rf /var/cache/apk/* /usr/local/bin/install-php-extensions
 
 RUN echo "upload_max_filesize=1024M" > /usr/local/etc/php/conf.d/uploads.ini \
     && echo "post_max_size=1024M" > /usr/local/etc/php/conf.d/post.ini \
