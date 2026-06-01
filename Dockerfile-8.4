@@ -3,6 +3,8 @@ FROM php:8.4-fpm-alpine
 ADD --chmod=0755 https://github.com/mlocati/docker-php-extension-installer/releases/latest/download/install-php-extensions /usr/local/bin/
 ADD --chmod=0755 https://getcomposer.org/download/latest-stable/composer.phar /usr/local/bin/composer
 
+WORKDIR /var/www
+
 RUN arch="$(uname -m)"; \
     if [ "$arch" = "aarch64" ] || [ "$arch" = "armv8l" ]; then \
         install-php-extensions bcmath gd mysqli pdo_mysql opcache pcntl redis swoole yaml zip; \
