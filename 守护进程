@@ -3,10 +3,10 @@
 set -e
 
 # 配置
-EXEC="/usr/bin/php"                        # PHP 可执行文件路径
+EXEC="/usr/local/bin/php"                  # PHP 可执行文件路径
 ARGS="/var/www/v2board/artisan horizon"    # 传给 php 的参数
 EXEC_USER="www-data"
-PIDFILE="/var/run/v2board.pid"
+PIDFILE="/tmp/v2board.pid"
 WORKDIR="/var/www/v2board"
 
 # 可选：从 /etc/default/v2board 加载额外参数
@@ -44,18 +44,18 @@ case "$1" in
             exit 0
         fi
         # 使用 start-stop-daemon（如果存在）或直接用 nohup 方式启动
-        if command -v start-stop-daemon >/dev/null 2>&1; then
-            start-stop-daemon --start --background --make-pidfile \
-                --pidfile "$PIDFILE" \
-                --chdir "$WORKDIR" \
-                --user "$EXEC_USER" \
-                --exec "$EXEC" -- $ARGS
-        else
-            # 备用方案：直接后台启动并写入 PID
-            cd "$WORKDIR"
-            nohup "$EXEC" $ARGS >/dev/null 2>&1 &
-            echo $! > "$PIDFILE"
-        fi
+        su -s /bin/sh "$EXEC_USER" <<EOF
+cd "$WORKDIR"
+# 如果存在 setsid，则使用它创建新会话；否则直接后台运行，并尝试 disown
+if command -v setsid >/dev/null 2>&1; then
+    exec setsid $EXEC $ARGS >/dev/null 2>&1 &
+else
+    $EXEC $ARGS >/dev/null 2>&1 &
+    disown
+fi
+echo \$! > "$PIDFILE"
+EOF
+        
         # 等待最多 5 秒确认启动
         for i in $(seq 1 5); do
             if is_running; then
