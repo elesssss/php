@@ -26,9 +26,24 @@ RUN apk add --no-cache openrc && \
     echo "max_execution_time=1200" > /usr/local/etc/php/conf.d/max_execution_time.ini && \
     echo "max_input_time=600" > /usr/local/etc/php/conf.d/max_input_time.ini && \
     echo "max_input_vars=10000" > /usr/local/etc/php/conf.d/max_input_vars.ini && \
-    rm -rf /var/cache/apk/* /etc/apk/cache/* /tmp/* /var/tmp/* /usr/local/lib/php/doc/* /root/.composer/cache /usr/local/bin/install-php-extensions
+    rm -rf \
+        /tmp/* \
+        /var/tmp/* \
+        /var/cache/apk/* \
+        /etc/apk/cache/* \
+        /root/.cache \
+        /root/.composer/cache \
+        /usr/local/lib/php/doc/* \
+        /usr/local/lib/php/build \
+        /usr/local/lib/php/test \
+        /usr/local/lib/php/extensions/*/sodium.so \
+        /usr/src/* \
+        /usr/local/lib/libtommath.a \
+        /usr/local/lib/libtomcrypt.a \
+        /usr/local/bin/install-php-extensions
 
 WORKDIR /var/www
+
 COPY --chmod=0755 docker-entrypoint /usr/bin/
 
 ENTRYPOINT ["docker-entrypoint"]
