@@ -1,0 +1,110 @@
+#!/bin/sh
+set -e
+
+cat <<'EOF' > /etc/init.d/php-fpm
+#!/sbin/openrc-run
+
+description="PHP FastCGI Process Manager"
+description_checkconfig="Verify PHP-FPM configuration"
+description_reload="Reload PHP-FPM configuration"
+
+extra_commands="checkconfig"
+extra_started_commands="reload"
+
+command="${PHP_FPM_BINARY:-/usr/local/sbin/php-fpm}"
+
+cfgfile="${PHP_FPM_CONFIG:-/usr/local/etc/php-fpm.conf}"
+
+pidfile="${PHP_FPM_PIDFILE:-/run/php-fpm.pid}"
+
+command_args="${PHP_FPM_OPTS:--D}"
+
+command_background=true
+
+required_files="$cfgfile"
+
+depend() {
+    need localmount
+    after bootmisc
+}
+
+print_config() {
+    "$command" -tt -y "$cfgfile" 2>&1
+}
+
+checkconfig() {
+    if [ ! -x "$command" ]; then
+        eerror "PHP-FPM binary not found: $command"
+        return 1
+    fi
+
+    if [ ! -f "$cfgfile" ]; then
+        eerror "PHP-FPM configuration not found: $cfgfile"
+        return 1
+    fi
+
+    ebegin "Checking PHP-FPM configuration"
+    "$command" -t -y "$cfgfile"
+    eend $?
+}
+
+start_pre() {
+    checkconfig || return 1
+
+    mkdir -p "$(dirname "$pidfile")" 2>/dev/null
+
+    if ! grep -q "^pid =" "$cfgfile" 2>/dev/null; then
+        command_args="$command_args --pid $pidfile"
+    fi
+
+    if [[ "$command_args" != *"--nodaemonize"* ]]; then
+        if [[ "$command_args" != *"-D"* ]]; then
+            command_args="$command_args -D"
+        fi
+    fi
+}
+
+stop_pre() {
+    if [ "${RC_CMD}" = "restart" ]; then
+        checkconfig || return 1
+    fi
+}
+
+reload() {
+    checkconfig || return 1
+
+    ebegin "Reloading $RC_SVCNAME"
+
+    if [ -f "$pidfile" ]; then
+        start-stop-daemon \
+            --signal HUP \
+            --pidfile "$pidfile"
+        eend $?
+    else
+        local pid=$(ps aux | grep -E "[p]hp-fpm.*master" | awk '{print $2}')
+        if [ -n "$pid" ]; then
+            kill -HUP $pid
+            eend $?
+        else
+            ewarn "PHP-FPM master process not found"
+            eend 1
+        fi
+    fi
+}
+
+stop_post() {
+    if [ "$RC_RUNLEVEL" = "shutdown" ]; then
+        return 0
+    fi
+
+    if [ -f "$pidfile" ]; then
+        rm -f "$pidfile"
+    fi
+}
+EOF
+
+chmod +x /etc/init.d/php-fpm
+
+rc-update add php-fpm default 2>/dev/null || true
+
+exec /sbin/init
