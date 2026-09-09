@@ -8,18 +8,6 @@ RUN apk add --no-cache openrc && \
     touch /run/openrc/softlevel && \
     sed -i 's/^#rc_sys=".*"/rc_sys="docker"/' /etc/rc.conf || true && \
     install-php-extensions bcmath gd mysqli pdo_mysql opcache pcntl redis swoole yaml zip && \
-    arch="$(uname -m)"; \
-    if [ "$arch" = "aarch64" ] || [ "$arch" = "armv8l" ]; then \
-        IONCUBE_URL="https://downloads.ioncube.com/loader_downloads/ioncube_loaders_lin_aarch64.tar.gz"; \
-    else \
-        IONCUBE_URL="https://downloads.ioncube.com/loader_downloads/ioncube_loaders_lin_x86-64.tar.gz"; \
-    fi && \
-    wget -O /tmp/ioncube.tar.gz $IONCUBE_URL && \
-    tar -xzf /tmp/ioncube.tar.gz -C /tmp && \
-    PHP_VERSION=$(php -r "echo PHP_MAJOR_VERSION.'.'.PHP_MINOR_VERSION;") && \
-    EXTENSION_DIR=$(php -r "echo ini_get('extension_dir');") && \
-    cp /tmp/ioncube/ioncube_loader_lin_${PHP_VERSION}.so $EXTENSION_DIR/ioncube.so && \
-    echo "zend_extension=ioncube.so" > /usr/local/etc/php/conf.d/docker-php-ext-ioncube.ini && \
     echo "upload_max_filesize=1024M" > /usr/local/etc/php/conf.d/uploads.ini && \
     echo "post_max_size=1024M" > /usr/local/etc/php/conf.d/post.ini && \
     echo "memory_limit=512M" > /usr/local/etc/php/conf.d/memory.ini && \
