@@ -1,7 +1,8 @@
 #!/bin/sh
 set -e
 
-cat <<'EOF' > /etc/init.d/php-fpm
+if [ ! -f /etc/init.d/php-fpm ]; then
+    cat <<'EOF' > /etc/init.d/php-fpm
 #!/sbin/openrc-run
 
 description="PHP FastCGI Process Manager"
@@ -23,16 +24,16 @@ command_background=true
 
 required_files="$cfgfile"
 
-depend() {
+depend(){
     need localmount
     after bootmisc
 }
 
-print_config() {
+print_config(){
     "$command" -tt -y "$cfgfile" 2>&1
 }
 
-checkconfig() {
+checkconfig(){
     if [ ! -x "$command" ]; then
         eerror "PHP-FPM binary not found: $command"
         return 1
@@ -48,7 +49,7 @@ checkconfig() {
     eend $?
 }
 
-start_pre() {
+start_pre(){
     checkconfig || return 1
 
     mkdir -p "$(dirname "$pidfile")" 2>/dev/null
@@ -64,13 +65,13 @@ start_pre() {
     fi
 }
 
-stop_pre() {
+stop_pre(){
     if [ "${RC_CMD}" = "restart" ]; then
         checkconfig || return 1
     fi
 }
 
-reload() {
+reload(){
     checkconfig || return 1
 
     ebegin "Reloading $RC_SVCNAME"
@@ -92,7 +93,7 @@ reload() {
     fi
 }
 
-stop_post() {
+stop_post(){
     if [ "$RC_RUNLEVEL" = "shutdown" ]; then
         return 0
     fi
@@ -103,7 +104,8 @@ stop_post() {
 }
 EOF
 
-chmod +x /etc/init.d/php-fpm
+    chmod +x /etc/init.d/php-fpm
+fi
 
 rc-update add php-fpm default 2>/dev/null || true
 
