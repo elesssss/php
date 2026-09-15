@@ -3,11 +3,11 @@ FROM php:8.4-fpm-alpine AS builder
 ADD --chmod=0755 https://github.com/mlocati/docker-php-extension-installer/releases/latest/download/install-php-extensions /usr/local/bin/
 ADD --chmod=0755 https://getcomposer.org/download/latest-stable/composer.phar /usr/local/bin/composer
 
-RUN apk add --no-cache openrc && \
+RUN apk add --no-cache openrc binutils && \
     mkdir -p /run/openrc && \
     touch /run/openrc/softlevel && \
     sed -i 's/^#rc_sys=".*"/rc_sys="docker"/' /etc/rc.conf || true && \
-    install-php-extensions bcmath gd mysqli pdo_mysql opcache pcntl redis swoole yaml zip && \
+    install-php-extensions bcmath gd mysqli pdo_mysql pcntl redis swoole yaml zip && \
     arch="$(uname -m)"; \
     if [ "$arch" = "aarch64" ] || [ "$arch" = "armv8l" ]; then \
         IONCUBE_URL="https://downloads.ioncube.com/loader_downloads/ioncube_loaders_lin_aarch64.tar.gz"; \
@@ -26,6 +26,11 @@ RUN apk add --no-cache openrc && \
     echo "max_execution_time=1200" > /usr/local/etc/php/conf.d/max_execution_time.ini && \
     echo "max_input_time=600" > /usr/local/etc/php/conf.d/max_input_time.ini && \
     echo "max_input_vars=10000" > /usr/local/etc/php/conf.d/max_input_vars.ini && \
+    strip --strip-all /usr/local/bin/php /usr/local/sbin/php-fpm && \
+    find /usr/local/lib/php/extensions -type f -name '*.so' ! -name 'ioncube.so' \
+        -exec strip --strip-unneeded {} + && \
+    apk del binutils && \
+    apk del .phpize-deps 2>/dev/null || true; \
     rm -rf \
         /tmp/* \
         /var/tmp/* \
@@ -37,8 +42,10 @@ RUN apk add --no-cache openrc && \
         /usr/local/lib/php/build \
         /usr/local/lib/php/test \
         /usr/src/* \
-        /usr/local/lib/libtommath.a \
-        /usr/local/lib/libtomcrypt.a \
+        /usr/local/lib/*.a \
+        /usr/local/lib/*.la \
+        /usr/local/lib/cmake \
+        /usr/local/include \
         /usr/local/bin/install-php-extensions
 
 RUN rm -rf \
@@ -49,25 +56,32 @@ RUN rm -rf \
         /usr/local/bin/peardev \
         /usr/local/bin/pecl \
         /usr/local/bin/docker-php-* \
-        /usr/local/lib/php/PEAR
+        /usr/local/lib/php/PEAR && \
+    find /usr/local/lib/php -mindepth 1 -maxdepth 1 ! -name extensions -exec rm -rf {} + && \
+    rm -f /usr/local/etc/php/php.ini-development && \
+    rm -rf /usr/local/share/ca-certificates
 
 RUN mkdir -p /tmp/orphan-libs && \
     touch /tmp/orphan-libs/.keep && \
     for f in /usr/local/bin/* /usr/local/sbin/* /usr/local/lib/php/extensions/*/*.so; do ldd "$f" 2>/dev/null; done | \
         awk '/=> \//{print $3}' | sort -u | while read -r lib; do \
-            [ -n "$(apk info -W "$lib" 2>/dev/null)" ] && continue; \
             real=$(readlink -f "$lib"); \
-            cp -L "$lib" "/tmp/orphan-libs/$(basename "$real")" && \
+            [ -n "$(apk info -W "$real" 2>/dev/null)" ] && continue; \
+            cp -L "$real" "/tmp/orphan-libs/$(basename "$real")" && \
             ln -sfn "$(basename "$real")" "/tmp/orphan-libs/$(basename "$lib")"; \
         done && \
+    apk add --no-cache binutils && \
+    find /tmp/orphan-libs -type f -name '*.so*' -exec strip --strip-unneeded {} + && \
+    apk del binutils && \
     awk '/^P:/{print substr($0,3)}' /lib/apk/db/installed | sort -u > /runtime-packages.txt
 
 FROM alpine:3.24
 
 COPY --from=builder /runtime-packages.txt /tmp/runtime-packages.txt
 
-RUN grep -v -E '^(curl|openssl|tar|xz|scanelf|ca-certificates)$' /tmp/runtime-packages.txt > /tmp/keep.txt && \
+RUN grep -v -E '^(\.|curl|openssl|tar|xz|scanelf|ca-certificates|libecpg|musl-utils)$' /tmp/runtime-packages.txt > /tmp/keep.txt && \
     apk add --no-cache $(cat /tmp/keep.txt) && \
+    apk del musl-utils 2>/dev/null || true; \
     rm -f /tmp/runtime-packages.txt /tmp/keep.txt && \
     rm -rf /var/cache/apk/* /tmp/* && \
     sed -i 's/^#rc_sys=".*"/rc_sys="docker"/' /etc/rc.conf || true; \
