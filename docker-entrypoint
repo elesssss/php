@@ -1,112 +1,94 @@
-#!/bin/sh
-set -e
+FROM php:7.4-fpm-alpine AS builder
 
-if [ ! -f /etc/init.d/php-fpm ]; then
-    cat <<'EOF' > /etc/init.d/php-fpm
-#!/sbin/openrc-run
+ADD --chmod=0755 https://github.com/mlocati/docker-php-extension-installer/releases/latest/download/install-php-extensions /usr/local/bin/
+ADD --chmod=0755 https://getcomposer.org/download/latest-stable/composer.phar /usr/local/bin/composer
 
-description="PHP FastCGI Process Manager"
-description_checkconfig="Verify PHP-FPM configuration"
-description_reload="Reload PHP-FPM configuration"
+RUN apk add --no-cache openrc binutils && \
+    mkdir -p /run/openrc && \
+    touch /run/openrc/softlevel && \
+    sed -i 's/^#rc_sys=".*"/rc_sys="docker"/' /etc/rc.conf || true && \
+    install-php-extensions bcmath gd mysqli pdo_mysql opcache pcntl redis swoole yaml zip && \
+    echo "upload_max_filesize=1024M" > /usr/local/etc/php/conf.d/uploads.ini && \
+    echo "post_max_size=1024M" > /usr/local/etc/php/conf.d/post.ini && \
+    echo "memory_limit=512M" > /usr/local/etc/php/conf.d/memory.ini && \
+    echo "max_execution_time=1200" > /usr/local/etc/php/conf.d/max_execution_time.ini && \
+    echo "max_input_time=600" > /usr/local/etc/php/conf.d/max_input_time.ini && \
+    echo "max_input_vars=10000" > /usr/local/etc/php/conf.d/max_input_vars.ini && \
+    strip --strip-all /usr/local/bin/php /usr/local/sbin/php-fpm && \
+    find /usr/local/lib/php/extensions -type f -name '*.so' \
+        -exec strip --strip-unneeded {} + && \
+    apk del binutils && \
+    apk del .phpize-deps 2>/dev/null || true; \
+    rm -rf \
+        /tmp/* \
+        /var/tmp/* \
+        /var/cache/apk/* \
+        /etc/apk/cache/* \
+        /root/.cache \
+        /root/.composer/cache \
+        /usr/local/lib/php/doc/* \
+        /usr/local/lib/php/build \
+        /usr/local/lib/php/test \
+        /usr/src/* \
+        /usr/local/lib/*.a \
+        /usr/local/lib/*.la \
+        /usr/local/lib/cmake \
+        /usr/local/include \
+        /usr/local/bin/install-php-extensions
 
-extra_commands="checkconfig"
-extra_started_commands="reload"
+RUN rm -rf \
+        /usr/local/include/php \
+        /usr/local/bin/phpize \
+        /usr/local/bin/php-config \
+        /usr/local/bin/pear \
+        /usr/local/bin/peardev \
+        /usr/local/bin/pecl \
+        /usr/local/bin/docker-php-* \
+        /usr/local/lib/php/PEAR && \
+    find /usr/local/lib/php -mindepth 1 -maxdepth 1 ! -name extensions -exec rm -rf {} + && \
+    rm -f /usr/local/etc/php/php.ini-development && \
+    rm -rf /usr/local/share/ca-certificates
 
-command="${PHP_FPM_BINARY:-/usr/local/sbin/php-fpm}"
+RUN mkdir -p /tmp/orphan-libs && \
+    touch /tmp/orphan-libs/.keep && \
+    for f in /usr/local/bin/* /usr/local/sbin/* /usr/local/lib/php/extensions/*/*.so; do ldd "$f" 2>/dev/null; done | \
+        awk '/=> \//{print $3}' | sort -u | while read -r lib; do \
+            real=$(readlink -f "$lib"); \
+            [ -n "$(apk info -W "$real" 2>/dev/null)" ] && continue; \
+            cp -L "$real" "/tmp/orphan-libs/$(basename "$real")" && \
+            ln -sfn "$(basename "$real")" "/tmp/orphan-libs/$(basename "$lib")"; \
+        done && \
+    apk add --no-cache binutils && \
+    find /tmp/orphan-libs -type f -name '*.so*' -exec strip --strip-unneeded {} + && \
+    apk del binutils && \
+    awk '/^P:/{print substr($0,3)}' /lib/apk/db/installed | sort -u > /runtime-packages.txt
 
-cfgfile="${PHP_FPM_CONFIG:-/usr/local/etc/php-fpm.conf}"
+FROM alpine:3.16
 
-pidfile="${PHP_FPM_PIDFILE:-/run/php-fpm.pid}"
+COPY --from=builder /runtime-packages.txt /tmp/runtime-packages.txt
 
-command_args="${PHP_FPM_OPTS:--D}"
+RUN grep -v -E '^(\.|curl|openssl|tar|xz|scanelf|ca-certificates|libecpg|musl-utils)$' /tmp/runtime-packages.txt > /tmp/keep.txt && \
+    apk add --no-cache $(cat /tmp/keep.txt) && \
+    apk del musl-utils 2>/dev/null || true; \
+    rm -f /tmp/runtime-packages.txt /tmp/keep.txt && \
+    rm -rf /var/cache/apk/* /tmp/* && \
+    sed -i 's/^#rc_sys=".*"/rc_sys="docker"/' /etc/rc.conf || true; \
+    mkdir -p /run/openrc && \
+    touch /run/openrc/softlevel && \
+    adduser -u 82 -D -S -G www-data www-data && \
+    mkdir -p /var/www && \
+    chown www-data:www-data /var/www && \
+    chmod 755 /var/www
 
-command_background=true
+COPY --from=builder /usr/local /usr/local
+COPY --from=builder /etc/ssl /etc/ssl
+COPY --from=builder /tmp/orphan-libs/ /usr/lib/
 
-required_files="$cfgfile"
+EXPOSE 9000
+STOPSIGNAL SIGQUIT
 
-depend(){
-    need localmount
-    after bootmisc
-}
+WORKDIR /var/www
 
-print_config(){
-    "$command" -tt -y "$cfgfile" 2>&1
-}
+COPY --chmod=0755 docker-entrypoint /usr/bin/
 
-checkconfig(){
-    if [ ! -x "$command" ]; then
-        eerror "PHP-FPM binary not found: $command"
-        return 1
-    fi
-
-    if [ ! -f "$cfgfile" ]; then
-        eerror "PHP-FPM configuration not found: $cfgfile"
-        return 1
-    fi
-
-    ebegin "Checking PHP-FPM configuration"
-    "$command" -t -y "$cfgfile"
-    eend $?
-}
-
-start_pre(){
-    checkconfig || return 1
-
-    mkdir -p "$(dirname "$pidfile")" 2>/dev/null
-
-    if ! grep -q "^pid =" "$cfgfile" 2>/dev/null; then
-        command_args="$command_args --pid $pidfile"
-    fi
-
-    if [[ "$command_args" != *"--nodaemonize"* ]]; then
-        if [[ "$command_args" != *"-D"* ]]; then
-            command_args="$command_args -D"
-        fi
-    fi
-}
-
-stop_pre(){
-    if [ "${RC_CMD}" = "restart" ]; then
-        checkconfig || return 1
-    fi
-}
-
-reload(){
-    checkconfig || return 1
-
-    ebegin "Reloading $RC_SVCNAME"
-
-    if [ -f "$pidfile" ]; then
-        start-stop-daemon \
-            --signal HUP \
-            --pidfile "$pidfile"
-        eend $?
-    else
-        local pid=$(ps aux | grep -E "[p]hp-fpm.*master" | awk '{print $2}')
-        if [ -n "$pid" ]; then
-            kill -HUP $pid
-            eend $?
-        else
-            ewarn "PHP-FPM master process not found"
-            eend 1
-        fi
-    fi
-}
-
-stop_post(){
-    if [ "$RC_RUNLEVEL" = "shutdown" ]; then
-        return 0
-    fi
-
-    if [ -f "$pidfile" ]; then
-        rm -f "$pidfile"
-    fi
-}
-EOF
-
-    chmod +x /etc/init.d/php-fpm
-fi
-
-rc-update add php-fpm default 2>/dev/null || true
-
-exec /sbin/init
+ENTRYPOINT ["docker-entrypoint"]
