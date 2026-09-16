@@ -15,7 +15,7 @@ RUN apk add --no-cache openrc binutils && \
     echo "max_input_time=600" > /usr/local/etc/php/conf.d/max_input_time.ini && \
     echo "max_input_vars=10000" > /usr/local/etc/php/conf.d/max_input_vars.ini && \
     strip --strip-all /usr/local/bin/php /usr/local/sbin/php-fpm && \
-    find /usr/local/lib/php/extensions -type f -name '*.so' ! -name 'ioncube.so' \
+    find /usr/local/lib/php/extensions -type f -name '*.so' \
         -exec strip --strip-unneeded {} + && \
     apk del binutils && \
     apk del .phpize-deps 2>/dev/null || true; \
