@@ -96,7 +96,6 @@ COPY --from=builder /usr/local /usr/local
 COPY --from=builder /etc/ssl /etc/ssl
 COPY --from=builder /tmp/orphan-libs/ /usr/lib/
 
-EXPOSE 9000
 STOPSIGNAL SIGQUIT
 
 WORKDIR /var/www
