@@ -7,7 +7,7 @@ RUN apk add --no-cache openrc binutils && \
     mkdir -p /run/openrc && \
     touch /run/openrc/softlevel && \
     sed -i 's/^#rc_sys=".*"/rc_sys="docker"/' /etc/rc.conf || true && \
-    install-php-extensions bcmath gd mysqli pdo_mysql pcntl redis swoole yaml zip && \
+    install-php-extensions bcmath gd mysqli pdo_mysql opcache pcntl redis swoole yaml zip && \
     echo "upload_max_filesize=1024M" > /usr/local/etc/php/conf.d/uploads.ini && \
     echo "post_max_size=1024M" > /usr/local/etc/php/conf.d/post.ini && \
     echo "memory_limit=512M" > /usr/local/etc/php/conf.d/memory.ini && \
@@ -63,7 +63,7 @@ RUN mkdir -p /tmp/orphan-libs && \
     apk del binutils && \
     awk '/^P:/{print substr($0,3)}' /lib/apk/db/installed | sort -u > /runtime-packages.txt
 
-FROM alpine:3.24
+FROM alpine:3.16
 
 COPY --from=builder /runtime-packages.txt /tmp/runtime-packages.txt
 
@@ -84,7 +84,6 @@ COPY --from=builder /usr/local /usr/local
 COPY --from=builder /etc/ssl /etc/ssl
 COPY --from=builder /tmp/orphan-libs/ /usr/lib/
 
-EXPOSE 9000
 STOPSIGNAL SIGQUIT
 
 WORKDIR /var/www
